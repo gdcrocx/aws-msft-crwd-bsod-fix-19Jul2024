@@ -2,7 +2,7 @@
 This is ongoing automation work on a fix for all BSOD EC2 instances due to the CrowdStrike **Falcon Content Update for Windows Hosts** mentioned here - https://www.crowdstrike.com/blog/statement-on-falcon-content-update-for-windows-hosts/.
 
 > [!WARNING]  
-> Warranty Disclaimer
+> ## Disclaimer
 > These scripts are provided "as-is" and without warranty of any kind, express, implied, or otherwise, including without limitation, any warranty of merchantability or fitness for a particular purpose. Before using these scripts, it is recommended to review them thoroughly to ensure they meet your requirements and are suitable for your intended use. Any use of these scripts is at your own risk, and the author(s) shall not be liable for any damages that may arise from the use or inability to use these scripts.
 
 ## Contributing
