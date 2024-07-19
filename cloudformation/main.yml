@@ -1,0 +1,105 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "CloudFormation stack to automate the Crowdstrike BSOD Fix"
+
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: Must be the name of an existing EC2 KeyPair
+
+Resources:
+  BSODRemediationEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.medium
+      KeyName: !Ref KeyName
+      ImageId: "{{resolve:ssm:/aws/service/ami-windows-latest/Windows_Server-2019-English-Full-Base::*}}"
+      # Uncomment the following section to use custom golden images within your organization.
+      # ImageId: !FindInMap
+      #   - AWSRegionArch2AMI
+      #   - !Ref "AWS::Region"
+      #   - Windows
+      Tags:
+        - Value: !Sub CRWD-BSOD-Fix-EC2Instance-${AWS::StackName}-${AWS::Region}
+          Key: Name
+
+  CRWDBSODDiscoveryLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      FunctionName: !Sub CRWD-BSOD-Fix-CRWDBSODDiscovery-${AWS::StackName}-${AWS::Region}
+      Runtime: python3.12
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: lambda1.zip
+
+  EBSDetachLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      FunctionName: !Sub CRWD-BSOD-Fix-EBSDetach-${AWS::StackName}-${AWS::Region}
+      Runtime: python3.12
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: lambda1.zip
+
+  EBSAttachLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      FunctionName: !Sub CRWD-BSOD-Fix-EBSAttach-${AWS::StackName}-${AWS::Region}
+      Runtime: python3.12
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: lambda2.zip
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - ec2:CreateNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DeleteNetworkInterface
+                  - ec2:Describe*
+                Resource: "*"
+
+# Note: In this script, we are using Publicly available Microsoft Windows Server 2022 AMIs. For custom golden images, you might be better off using Mappings
+# Mappings:
+#   AWSRegionArch2AMI:
+#     us-east-1:
+#       Windows: "ami-xxxxxxxxxxxxxxxx"  # Replace with actual Windows AMI ID for your region
+#     # Add more regions as needed
+
+Outputs:
+  BSODRemediationInstanceId:
+    Description: "Instance Id of the newly created EC2 instance"
+    Value: !Ref BSODRemediationEC2Instance
+  EBSDetachLambdaFunction:
+    Description: "ARN of EBSDetachLambdaFunction"
+    Value: !GetAtt EBSDetachLambdaFunction.Arn
+  EBSAttachLambdaFunction:
+    Description: "ARN of EBSAttachLambdaFunction"
+    Value: !GetAtt EBSAttachLambdaFunction.Arn
