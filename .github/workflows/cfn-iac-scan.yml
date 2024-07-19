@@ -1,0 +1,58 @@
+name: cfn-iac-scan
+
+on:
+  push:
+    branches: ["main", "dev"]
+  pull_request:
+    branches: ["main", "dev"]
+
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Git Checkout
+        uses: actions/checkout@v4.1.1
+
+      - name: Setup CloudFormation Linter
+        uses: scottbrenner/cfn-lint-action@v2.4.0
+
+      - name: Run CloudFormation Linter
+        run: |
+          cfn-lint -t ./cloudformation/main.yml
+
+      - name: Run cfn_nag
+        uses: stelligent/cfn_nag@v0.8.10
+        with:
+          input_path: cloudformation/main.yml
+          extra_args: --fail-on-warnings -o json
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [scan]
+    if: contains('refs/heads/main, refs/heads/dev', github.ref)
+
+    steps:
+      - name: Git Checkout
+        uses: actions/checkout@4.1.1
+
+      - name: Configure AWS Credentials Action for Github actions
+        uses: aws-actions/configure-aws-credentials@v4.0.1
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/github-bsod-fix-role
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Extract branch name
+        shell: bash
+        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+        id: extract_branch
+
+      - name: Sync files to S3 Bucket
+        run: |
+          aws s3 sync . s3://${{ vars.BUCKET_BASE_URL }}/${{ steps.extract_branch.outputs.branch }}/ --exclude '*' --include 'cloudformation/*' --include 'LICENSE' --include 'README.md'
