@@ -1,4 +1,4 @@
-# aws-msft-crwd-bsod-fix-19Jul2024
+# aws-msft-crwd-bsod-fix-19jul2024
 This is ongoing automation work on a fix for all BSOD EC2 instances due to the CrowdStrike **Falcon Content Update for Windows Hosts** mentioned here - https://www.crowdstrike.com/blog/statement-on-falcon-content-update-for-windows-hosts/.
 
 > [!WARNING]  
@@ -10,7 +10,7 @@ This is ongoing automation work on a fix for all BSOD EC2 instances due to the C
 If you encounter a bug or think of a useful feature, or find something confusing in the docs, please
 **[Create a New Issue](https://github.com/GeorgeDavis-TM/WorkloadSecurity-AWS-SNS/issues/new)**
 
- **P.S. Make sure to use the [Issue Template](https://github.com/gdcrocx/aws-msft-crwd-bsod-fix-19Jul2024/tree/master/.github/ISSUE_TEMPLATE)**
+ **P.S. Make sure to use the [Issue Template](https://github.com/gdcrocx/aws-msft-crwd-bsod-fix-19jul2024/tree/master/.github/ISSUE_TEMPLATE)**
 
 We :heart: pull requests. If you'd like to fix a bug or contribute to a feature or simply correct a typo, please feel free to do so.
 
