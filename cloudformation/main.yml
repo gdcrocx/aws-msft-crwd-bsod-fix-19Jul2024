@@ -1,6 +1,6 @@
 ---
-AWSTemplateFormatVersion: "2010-09-09"
-Description: "CloudFormation stack to automate the Crowdstrike BSOD Fix"
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation stack to deploy an EC2 autoscaling group to automate patching Crowdstrike BSOD on root EBS volumes
 
 Parameters:
   KeyName:
@@ -8,9 +8,9 @@ Parameters:
     Type: AWS::EC2::KeyPair::KeyName
     ConstraintDescription: Must be the name of an existing EC2 KeyPair
 
-  TargetVpcIds:
+  TargetSubnetIds:
     Description: VPC Id of the target VPC
-    Type: List<AWS::EC2::VPC::Id>
+    Type: List<AWS::EC2::Subnet::Id>
     ConstraintDescription: Must be a valid VPC Id
 
   MaxNumberOfInstancesInASG:
@@ -68,7 +68,7 @@ Resources:
         Version: !GetAtt BSODRemediationEC2LaunchTemplate.LatestVersionNumber
       MaxSize: !Ref MaxNumberOfInstancesInASG
       MinSize: '1'
-      VPCZoneIdentifier: !Ref TargetVpcIds
+      VPCZoneIdentifier: !Ref TargetSubnetIds
   
   LocalCodeS3Bucket:
     Type: AWS::S3::Bucket
@@ -84,10 +84,10 @@ Resources:
     Properties:
       Bucket: !Ref LocalCodeS3Bucket
       PolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal: "*"
+            Principal: '*'
             Action:
               - s3:GetObject
             Resource: 
@@ -131,7 +131,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
@@ -140,7 +140,7 @@ Resources:
       Policies:
         - PolicyName: LambdaExecutionPolicy
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
@@ -154,7 +154,12 @@ Resources:
                   - ec2:DescribeNetworkInterfaces
                   - ec2:DeleteNetworkInterface
                   - ec2:Describe*
-                Resource: "*"
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSubnets
+                Resource: '*'
 
   SQSFIFOQueue:
     Type: AWS::SQS::Queue
@@ -170,40 +175,40 @@ Resources:
 # Mappings:
 #   AWSRegionArch2AMI:
 #     us-east-1:
-#       Windows: "ami-xxxxxxxxxxxxxxxx"  # Replace with actual Windows AMI Id for your region
+#       Windows: 'ami-xxxxxxxxxxxxxxxx'  # Replace with actual Windows AMI Id for your region
 #     # Add more regions as needed
 
 Outputs:
   BSODRemediationLaunchTemplateName:
-    Description: "Name of the created EC2 Launch Template"
+    Description: Name of the created EC2 Launch Template
     Value: !Ref BSODRemediationEC2LaunchTemplate
 
   BSODRemediationInstanceId:
-    Description: "Instance Id of the newly created EC2 instance"
+    Description: Instance Id of the newly created EC2 instance
     Value: !Ref BSODRemediationEC2Instance
 
   EBSDetachLambdaFunction:
-    Description: "ARN of EBSDetachLambdaFunction"
+    Description: ARN of EBSDetachLambdaFunction
     Value: !GetAtt EBSDetachLambdaFunction.Arn
 
   EBSAttachLambdaFunction:
-    Description: "ARN of EBSAttachLambdaFunction"
+    Description: ARN of EBSAttachLambdaFunction
     Value: !GetAtt EBSAttachLambdaFunction.Arn
 
   SQSFIFOQueueUrl:
-    Description: "URL of the created SQS FIFO queue"
+    Description: URL of the created SQS FIFO queue
     Value: !GetAtt SQSFIFOQueue.QueueUrl
 
   LocalCodeS3BucketName:
-    Description: "Name of the created SSE S3 bucket"
+    Description: Name of the created SSE S3 bucket
     Value: !Ref LocalCodeS3Bucket
 
   LocalCodeS3BucketArn:
-    Description: "ARN of the created SSE S3 bucket"
+    Description: ARN of the created SSE S3 bucket
     Value: !GetAtt LocalCodeS3Bucket.Arn
 
   LocalCodeS3BucketDomainName:
-    Description: "DNS name of the created SSE S3 bucket"
+    Description: DNS name of the created SSE S3 bucket
     Value: !GetAtt LocalCodeS3Bucket.DomainName
 
 Metadata:
