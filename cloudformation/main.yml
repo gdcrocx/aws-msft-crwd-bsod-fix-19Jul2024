@@ -8,54 +8,124 @@ Parameters:
     Type: AWS::EC2::KeyPair::KeyName
     ConstraintDescription: Must be the name of an existing EC2 KeyPair
 
+  TargetVpcIds:
+    Description: VPC Id of the target VPC
+    Type: List<AWS::EC2::VPC::Id>
+    ConstraintDescription: Must be a valid VPC Id
+
+  MaxNumberOfInstancesInASG:
+    Description: Maximum number of instance(s) in the Autoscaling Group
+    Type: String
+    Default: '10'
+    ConstraintDescription: Must be a valid number
+    AllowedPattern: ^[0-9]+$
+
+  LambdaSourceCodeBucket:
+    Description: S3 Bucket that has the Lambda function code ZIP files
+    Type: String
+    Default: aws-msft-crwd-bsod-fix-19jul2024
+    ConstraintDescription: Must be a valid S3 bucket
+
 Resources:
+
+  BSODRemediationEC2LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub 'crwd-bsod-fix-ec2-launch-template-${AWS::StackName}-${AWS::Region}'
+      LaunchTemplateData:
+        InstanceType: t3.medium
+        KeyName: !Ref KeyName
+        ImageId: !Sub '{{resolve:ssm:/aws/service/ami-windows-latest/Windows_Server-2019-English-Full-Base}}'
+        TagSpecifications:
+          - ResourceType: launch-template
+            Tags:
+              - Key: Name
+                Value: !Sub 'crwd-bsod-fix-ec2-launch-template-${AWS::StackName}-${AWS::Region}'
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub 'crwd-bsod-fix-ec2-instance-${AWS::StackName}-${AWS::Region}'
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W1020
+
+  # TODO: Work on an ASG instead of a single instance, scale with SQS FIFO Queue 
   BSODRemediationEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t3.medium
-      KeyName: !Ref KeyName
-      ImageId: "{{resolve:ssm:/aws/service/ami-windows-latest/Windows_Server-2019-English-Full-Base::*}}"
-      # Uncomment the following section to use custom golden images within your organization.
-      # ImageId: !FindInMap
-      #   - AWSRegionArch2AMI
-      #   - !Ref "AWS::Region"
-      #   - Windows
-      Tags:
-        - Value: !Sub CRWD-BSOD-Fix-EC2Instance-${AWS::StackName}-${AWS::Region}
-          Key: Name
+      LaunchTemplate:
+        LaunchTemplateName: !Ref BSODRemediationEC2LaunchTemplate
+        Version: !GetAtt BSODRemediationEC2LaunchTemplate.LatestVersionNumber
+
+  BSODRemediationASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub 'crwd-bsod-fix-autoscaling-group-${AWS::StackName}-${AWS::Region}'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref BSODRemediationEC2LaunchTemplate
+        Version: !GetAtt BSODRemediationEC2LaunchTemplate.LatestVersionNumber
+      MaxSize: !Ref MaxNumberOfInstancesInASG
+      MinSize: '1'
+      VPCZoneIdentifier: !Ref TargetVpcIds
+  
+  LocalCodeS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'aws-msft-crwd-bsod-fix-19jul2024-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256  # Use AES256 for SSE-S3
+
+  LocalCodeS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LocalCodeS3Bucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action:
+              - s3:GetObject
+            Resource: 
+              - !Sub 'arn:${AWS::Partition}:s3:::${LocalCodeS3Bucket}'
+              - !Sub 'arn:${AWS::Partition}:s3:::${LocalCodeS3Bucket}/*'
 
   CRWDBSODDiscoveryLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      FunctionName: !Sub CRWD-BSOD-Fix-CRWDBSODDiscovery-${AWS::StackName}-${AWS::Region}
+      FunctionName: !Sub 'crwd-bsod-fix-discovery-${AWS::StackName}-${AWS::Region}'
       Runtime: python3.12
       Code:
-        S3Bucket: !Ref LambdaCodeBucket
-        S3Key: lambda1.zip
+        S3Bucket: !Ref LambdaSourceCodeBucket
+        S3Key: lambda/dist/crwd-bsod-discovery-lambda-function.zip
 
   EBSDetachLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      FunctionName: !Sub CRWD-BSOD-Fix-EBSDetach-${AWS::StackName}-${AWS::Region}
+      FunctionName: !Sub 'crwd-bsod-ebs-detach-${AWS::StackName}-${AWS::Region}'
       Runtime: python3.12
       Code:
-        S3Bucket: !Ref LambdaCodeBucket
-        S3Key: lambda1.zip
+        S3Bucket: !Ref LambdaSourceCodeBucket
+        S3Key: lambda/dist/ebs-detach-lambda-function.zip
 
   EBSAttachLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
-      FunctionName: !Sub CRWD-BSOD-Fix-EBSAttach-${AWS::StackName}-${AWS::Region}
+      FunctionName: !Sub 'crwd-bsod-ebs-attach-${AWS::StackName}-${AWS::Region}'
       Runtime: python3.12
       Code:
-        S3Bucket: !Ref LambdaCodeBucket
-        S3Key: lambda2.zip
+        S3Bucket: !Ref LambdaSourceCodeBucket
+        S3Key: lambda/dist/ebs-attach-lambda-function.zip
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -77,7 +147,7 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: arn:aws:logs:*:*:*
+                Resource: !Sub 'arn:${AWS::Partition}:logs:*:*:*'
               - Effect: Allow
                 Action:
                   - ec2:CreateNetworkInterface
@@ -86,20 +156,66 @@ Resources:
                   - ec2:Describe*
                 Resource: "*"
 
+  SQSFIFOQueue:
+    Type: AWS::SQS::Queue
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      QueueName: !Sub 'crwd-bsod-fix-sqs-fifo-queue-${AWS::StackName}-${AWS::Region}'
+      FifoQueue: true
+      MessageRetentionPeriod: 1209600
+      ContentBasedDeduplication: true
+
 # Note: In this script, we are using Publicly available Microsoft Windows Server 2022 AMIs. For custom golden images, you might be better off using Mappings
 # Mappings:
 #   AWSRegionArch2AMI:
 #     us-east-1:
-#       Windows: "ami-xxxxxxxxxxxxxxxx"  # Replace with actual Windows AMI ID for your region
+#       Windows: "ami-xxxxxxxxxxxxxxxx"  # Replace with actual Windows AMI Id for your region
 #     # Add more regions as needed
 
 Outputs:
+  BSODRemediationLaunchTemplateName:
+    Description: "Name of the created EC2 Launch Template"
+    Value: !Ref BSODRemediationEC2LaunchTemplate
+
   BSODRemediationInstanceId:
     Description: "Instance Id of the newly created EC2 instance"
     Value: !Ref BSODRemediationEC2Instance
+
   EBSDetachLambdaFunction:
     Description: "ARN of EBSDetachLambdaFunction"
     Value: !GetAtt EBSDetachLambdaFunction.Arn
+
   EBSAttachLambdaFunction:
     Description: "ARN of EBSAttachLambdaFunction"
     Value: !GetAtt EBSAttachLambdaFunction.Arn
+
+  SQSFIFOQueueUrl:
+    Description: "URL of the created SQS FIFO queue"
+    Value: !GetAtt SQSFIFOQueue.QueueUrl
+
+  LocalCodeS3BucketName:
+    Description: "Name of the created SSE S3 bucket"
+    Value: !Ref LocalCodeS3Bucket
+
+  LocalCodeS3BucketArn:
+    Description: "ARN of the created SSE S3 bucket"
+    Value: !GetAtt LocalCodeS3Bucket.Arn
+
+  LocalCodeS3BucketDomainName:
+    Description: "DNS name of the created SSE S3 bucket"
+    Value: !GetAtt LocalCodeS3Bucket.DomainName
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Environment-specific Information
+        Parameters:
+          - KeyName
+          - TargetVpcId
+
+      - Label:
+          default: DO NOT MODIFY THE FOLLOWING VALUES. FOR DEVELOPER USE ONLY.
+        Parameters:
+          - LambdaCodeBucket
