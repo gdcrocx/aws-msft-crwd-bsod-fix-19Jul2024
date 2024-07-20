@@ -1,0 +1,16 @@
+org: gdcrocx
+app: crwd-bsod-discovery-lambda-function
+service: crwd-bsod-discovery-lambda-function
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.10
+
+functions:
+  crwd-bsod-discovery-lambda-function:
+    handler: handler.lambda_handler
+
+plugins:
+  - serverless-python-requirements

@@ -1,0 +1,16 @@
+org: gdcrocx
+app: crwd-bsod-ebs-detach-lambda-function
+service: crwd-bsod-ebs-detach-lambda-function
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.10
+
+functions:
+  crwd-bsod-ebs-detach-lambda:
+    handler: handler.lambda_handler
+
+plugins:
+  - serverless-python-requirements
