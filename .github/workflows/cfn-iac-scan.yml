@@ -18,10 +18,10 @@ jobs:
 
     steps:
       - name: Git Checkout
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4.1.7
 
       - name: Setup CloudFormation Linter
-        uses: scottbrenner/cfn-lint-action@v2.4.0
+        uses: ScottBrenner/cfn-lint-action@v2.4.2
 
       - name: Run CloudFormation Linter
         run: |
@@ -40,10 +40,10 @@ jobs:
 
     steps:
       - name: Git Checkout
-        uses: actions/checkout@4.1.1
+        uses: actions/checkout@v4.1.7
 
       - name: Configure AWS Credentials Action for Github actions
-        uses: aws-actions/configure-aws-credentials@v4.0.1
+        uses: aws-actions/configure-aws-credentials@v4.0.2
         with:
           role-to-assume: arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/github-bsod-fix-role
           aws-region: ${{ vars.AWS_REGION }}
