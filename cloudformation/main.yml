@@ -218,9 +218,10 @@ Metadata:
           default: Environment-specific Information
         Parameters:
           - KeyName
-          - TargetVpcId
+          - TargetSubnetIds
+          - MaxNumberOfInstancesInASG
 
       - Label:
           default: DO NOT MODIFY THE FOLLOWING VALUES. FOR DEVELOPER USE ONLY.
         Parameters:
-          - LambdaCodeBucket
+          - LambdaSourceCodeBucket
